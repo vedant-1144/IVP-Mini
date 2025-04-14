@@ -47,7 +47,7 @@ def auto_rotate(image, edges):
     contour = max(contours, key=cv2.contourArea)
     rect = cv2.minAreaRect(contour)
     box = cv2.boxPoints(rect)
-    box = np.int0(box)
+    box = box.astype(int)
     
     angle = rect[-1]
     if angle < -45:
