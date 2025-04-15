@@ -95,3 +95,48 @@ def get_file_size(image):
     if is_success:
         return len(buffer) / 1024
     return 0
+
+def rle_encode(img):
+    """Run-length encode image"""
+    if len(img.shape) == 3:
+        # Convert to grayscale for compression
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    # Flatten the array
+    flat_img = img.flatten()
+    
+    encoded = []
+    count = 1
+    curr = flat_img[0]
+    
+    # Encode
+    for pixel in flat_img[1:]:
+        if pixel == curr:
+            count += 1
+        else:
+            encoded.extend([int(curr), int(count)])
+            curr = pixel
+            count = 1
+    encoded.extend([int(curr), int(count)])
+    
+    # Convert to uint16 to handle larger counts
+    return np.array(encoded, dtype=np.uint16), img.shape
+
+def rle_decode(encoded, shape):
+    """Decode RLE back to image"""
+    decoded = []
+    
+    # Decode pairs of values
+    for i in range(0, len(encoded), 2):
+        pixel = int(encoded[i])
+        count = int(encoded[i + 1])
+        decoded.extend([pixel] * count)
+    
+    # Reshape back to original dimensions
+    decoded = np.array(decoded, dtype=np.uint8).reshape(shape)
+    
+    # Convert back to BGR if needed
+    if len(shape) == 2:
+        decoded = cv2.cvtColor(decoded, cv2.COLOR_GRAY2BGR)
+    
+    return decoded
