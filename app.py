@@ -65,31 +65,37 @@ if uploaded_file:
     tab1, tab2, tab3 = st.tabs(["📸 Basic Processing", "📊 Advanced Processing", "📑 Export"])
     
     with tab1:
-        st.subheader("1️⃣ Original Image")
-        st.image(original_image, channels="BGR", use_container_width=True)
-        
-        # Basic Enhancement Controls
-        st.subheader("2️⃣ Basic Enhancement")
+        # Change layout to use columns for side-by-side comparison
         col1, col2 = st.columns(2)
+        
         with col1:
+            st.subheader("1️⃣ Original Image")
+            st.image(original_image, channels="BGR", use_container_width=True)
+            
+            # Show original size
+            original_size = get_file_size(original_image)
+            st.markdown(f"""
+            <div class="stats">
+                📊 Original Size: {original_size:.1f}KB
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.subheader("2️⃣ Basic Enhancement")
+            # Controls for enhancement
             contrast = st.slider("Contrast", 1.0, 3.0, 1.5, 0.1)
             brightness = st.slider("Brightness", 0, 100, 20)
             
             # Apply basic enhancement
             enhanced = cv2.convertScaleAbs(original_image, alpha=contrast, beta=brightness)
             st.image(enhanced, channels="BGR", use_container_width=True)
-        
-        with col2:
-            # Show immediate size comparison
-            original_size = get_file_size(original_image)
+            
+            # Show enhancement stats
             enhanced_size = get_file_size(enhanced)
             st.markdown(f"""
             <div class="stats">
-                📊 Size Comparison:
-                - Original: {original_size:.1f}KB
-                - Enhanced: {enhanced_size:.1f}KB
-                - Reduction: {((original_size-enhanced_size)/original_size*100):.1f}%
-            </div>
+                📊 Enhancement Stats:
+                - Enhanced Size: {enhanced_size:.1f}KB
             """, unsafe_allow_html=True)
     
     with tab2:
@@ -218,59 +224,18 @@ if uploaded_file:
                 add_image_download_button(hist_eq, f"{eq_type.lower()}_equalized.png", f"Download {eq_type} Equalized")
         
         with process_tab3:
-            # DCT Compression
-            st.subheader("5️⃣ DCT Compression")
-            quality = st.slider("Compression Quality (lower = more compression)", 1, 100, 50)
+            # Compression Section
+            st.subheader("5️⃣ Image Compression")
             
-            def dct_compress(img, quality_percent):
-                # Convert to YCrCb
-                img_yuv = cv2.cvtColor(img, cv2.COLOR_BGR2YCR_CB)
-                channels = cv2.split(img_yuv)
-                compressed_channels = []
-                
-                for channel in channels:
-                    # Apply DCT
-                    dct = cv2.dct(np.float32(channel))
-                    # Zero out high-frequency components based on quality
-                    thresh = np.percentile(np.abs(dct), 100 - quality_percent)
-                    dct[np.abs(dct) < thresh] = 0
-                    # Inverse DCT
-                    compressed = cv2.idct(dct)
-                    compressed_channels.append(np.uint8(compressed))
-                
-                # Merge channels and convert back to BGR
-                compressed_yuv = cv2.merge(compressed_channels)
-                return cv2.cvtColor(compressed_yuv, cv2.COLOR_YCR_CB2BGR)
+            # Add compression level control
+            compression_level = st.slider("Compression Level", 1, 8, 4)
             
-            compressed = dct_compress(enhanced, quality)
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write("Original Enhanced Image")
-                st.image(enhanced, channels="BGR", use_container_width=True)
-            with col2:
-                st.write("DCT Compressed Image")
-                st.image(compressed, channels="BGR", use_container_width=True)
-                
-                # Show compression stats
-                original_size = get_file_size(enhanced)
-                compressed_size = get_file_size(compressed)
-                st.markdown(f"""
-                <div class="stats">
-                    📊 Compression Stats:
-                    - Original: {original_size:.1f}KB
-                    - Compressed: {compressed_size:.1f}KB
-                    - Reduction: {((original_size-compressed_size)/original_size*100):.1f}%
-                </div>
-                """, unsafe_allow_html=True)
-            
-            # RLE Compression
-            st.subheader("5️⃣ RLE Compression")
-            
-            # Convert to grayscale for better compression visualization
+            # Convert to grayscale and reduce color depth for compression
             gray_enhanced = cv2.cvtColor(enhanced, cv2.COLOR_BGR2GRAY)
+            reduced_colors = (gray_enhanced // (2**compression_level)) * (2**compression_level)
             
             # Apply RLE compression
-            encoded_data, original_shape = rle_encode(enhanced)
+            encoded_data, original_shape = rle_encode(reduced_colors)
             compressed_img = rle_decode(encoded_data, original_shape)
             
             col1, col2 = st.columns(2)
@@ -282,31 +247,37 @@ if uploaded_file:
                 st.write("Original Histogram")
                 plot_histogram(enhanced, "Original")
                 st.image("output/Original.png", use_container_width=True)
+                
+                # Original file size
+                original_size = get_file_size(enhanced)
+                st.markdown(f"Original Size: {original_size:.1f}KB")
             
             with col2:
-                st.write("RLE Compressed Image")
+                st.write("Compressed Image")
                 st.image(compressed_img, channels="BGR", use_container_width=True)
-                add_image_download_button(compressed_img, "rle_compressed.png", "Download RLE Compressed")
                 
                 # Show compressed histogram
                 st.write("Compressed Histogram")
                 plot_histogram(compressed_img, "Compressed")
                 st.image("output/Compressed.png", use_container_width=True)
                 
-                # Show compression stats
-                original_size = get_file_size(enhanced)
-                compressed_size = len(encoded_data) / 1024  # Convert to KB
+                # Calculate compression statistics
+                compressed_size = len(encoded_data) * 2 / 1024  # Convert bytes to KB
                 compression_ratio = (original_size - compressed_size) / original_size * 100
                 
                 st.markdown(f"""
                 <div class="stats">
-                    📊 RLE Compression Stats:
+                    📊 Compression Stats:
                     - Original Size: {original_size:.1f}KB
                     - Compressed Size: {compressed_size:.1f}KB
                     - Compression Ratio: {compression_ratio:.1f}%
-                    - Encoded Data Length: {len(encoded_data)} bytes
+                    - Color Levels: {256//(2**compression_level)}
                 </div>
                 """, unsafe_allow_html=True)
+                
+                add_image_download_button(compressed_img, 
+                                        f"compressed_level_{compression_level}.png", 
+                                        "Download Compressed Image")
             
             # Add option to download compressed data
             if st.button("Save Compressed Data", use_container_width=True):

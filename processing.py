@@ -97,10 +97,13 @@ def get_file_size(image):
     return 0
 
 def rle_encode(img):
-    """Run-length encode image"""
+    """Run-length encode image with improved compression"""
+    # Convert to grayscale for better compression
     if len(img.shape) == 3:
-        # Convert to grayscale for compression
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    # Reduce color depth to improve compression
+    img = (img // 32) * 32  # Reduce to 8 levels (3 bits) instead of 256 levels
     
     # Flatten the array
     flat_img = img.flatten()
@@ -109,9 +112,9 @@ def rle_encode(img):
     count = 1
     curr = flat_img[0]
     
-    # Encode
+    # Encode with improved run-length counting
     for pixel in flat_img[1:]:
-        if pixel == curr:
+        if pixel == curr and count < 65535:  # Using uint16 max value
             count += 1
         else:
             encoded.extend([int(curr), int(count)])
@@ -119,11 +122,10 @@ def rle_encode(img):
             count = 1
     encoded.extend([int(curr), int(count)])
     
-    # Convert to uint16 to handle larger counts
     return np.array(encoded, dtype=np.uint16), img.shape
 
 def rle_decode(encoded, shape):
-    """Decode RLE back to image"""
+    """Decode RLE back to image with color depth restoration"""
     decoded = []
     
     # Decode pairs of values
@@ -135,8 +137,7 @@ def rle_decode(encoded, shape):
     # Reshape back to original dimensions
     decoded = np.array(decoded, dtype=np.uint8).reshape(shape)
     
-    # Convert back to BGR if needed
-    if len(shape) == 2:
-        decoded = cv2.cvtColor(decoded, cv2.COLOR_GRAY2BGR)
+    # Convert back to BGR
+    decoded = cv2.cvtColor(decoded, cv2.COLOR_GRAY2BGR)
     
     return decoded
